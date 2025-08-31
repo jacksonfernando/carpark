@@ -1,0 +1,74 @@
+version: '3.8'
+
+services:
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: carpark-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: carpark_db
+      MYSQL_USER: carpark_user
+      MYSQL_PASSWORD: carpark_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - carpark-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: carpark-redis
+    ports:
+      - "7001:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - carpark-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      timeout: 20s
+      retries: 10
+
+  # Spring Boot Application
+  carpark-api:
+    build: .
+    container_name: carpark-api
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/carpark_db?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: carpark_user
+      SPRING_DATASOURCE_PASSWORD: carpark_password
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      CARPARK_DATA_CSV_PATH: /app/data/carpark-data.csv
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - carpark-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/carparks/health"]
+      timeout: 30s
+      retries: 5
+      start_period: 60s
+
+volumes:
+  mysql_data:
+  redis_data:
+
+networks:
+  carpark-network:
+    driver: bridge
