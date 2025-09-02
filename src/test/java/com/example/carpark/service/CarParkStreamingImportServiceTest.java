@@ -5,25 +5,25 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.locationtech.jts.geom.GeometryFactory;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 @ExtendWith(MockitoExtension.class)
-class CachedCarParkServiceTest {
+class CarParkStreamingImportServiceTest {
 
     @Mock
     private CarParkMySqlRepository carParkMySqlRepository;
 
     @Mock
-    private GeometryFactory geometryFactory;
+    private CoordinateConversionService coordinateConversionService;
 
     @Test
     void testServiceInitialization() {
         // Arrange & Act
-        CachedCarParkService service = new CachedCarParkService(
+        CarParkStreamingImportService service = new CarParkStreamingImportService(
             carParkMySqlRepository,
-            geometryFactory
+            coordinateConversionService,
+            null // GeometryFactory not needed for basic tests
         );
 
         // Assert
@@ -33,16 +33,13 @@ class CachedCarParkServiceTest {
     @Test
     void testConstructorInjection() {
         // Arrange & Act
-        CachedCarParkService service = new CachedCarParkService(
+        CarParkStreamingImportService service = new CarParkStreamingImportService(
             carParkMySqlRepository,
-            geometryFactory
+            coordinateConversionService,
+            null
         );
 
         // Assert
         assertNotNull(service);
-        // Verify that dependencies are properly injected
-        assertDoesNotThrow(() -> {
-            // Test that the service can be instantiated
-        });
     }
 }

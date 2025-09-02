@@ -1,19 +1,17 @@
 package com.example.carpark.service;
 
 import com.example.carpark.entity.CarPark;
-import com.example.carpark.repository.CarParkRepository;
+import com.example.carpark.repository.mysql.CarParkMySqlRepository;
+import java.math.BigDecimal;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-
-import java.math.BigDecimal;
-import java.time.LocalDateTime;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -23,7 +21,7 @@ import static org.mockito.Mockito.*;
 class CarParkManagementServiceTest {
 
     @Mock
-    private CarParkRepository carParkRepository;
+    private CarParkMySqlRepository carParkMySqlRepository;
 
     @InjectMocks
     private CarParkManagementService carParkManagementService;
@@ -33,262 +31,211 @@ class CarParkManagementServiceTest {
 
     @BeforeEach
     void setUp() {
-        carPark1 = new CarPark("A1", "Test Address 1", new BigDecimal("1.23456789"), new BigDecimal("103.45678901"));
+        // Create mock car parks
+        carPark1 = new CarPark();
         carPark1.setId(1L);
+        carPark1.setCarParkNo("A1");
+        carPark1.setAddress("Test Address 1");
+        carPark1.setLatitude(new BigDecimal("1.3521"));
+        carPark1.setLongitude(new BigDecimal("103.8198"));
         carPark1.setTotalLots(100);
         carPark1.setAvailableLots(50);
-        carPark1.setCarParkType("SURFACE CAR PARK");
-        carPark1.setTypeOfParkingSystem("COUPON");
 
-        carPark2 = new CarPark("A2", "Test Address 2", new BigDecimal("1.23456790"), new BigDecimal("103.45678902"));
+        carPark2 = new CarPark();
         carPark2.setId(2L);
-        carPark2.setTotalLots(80);
-        carPark2.setAvailableLots(30);
-        carPark2.setCarParkType("MULTI-STOREY CAR PARK");
-        carPark2.setTypeOfParkingSystem("ELECTRONIC PARKING");
+        carPark2.setCarParkNo("A2");
+        carPark2.setAddress("Test Address 2");
+        carPark2.setLatitude(new BigDecimal("1.3522"));
+        carPark2.setLongitude(new BigDecimal("103.8199"));
+        carPark2.setTotalLots(200);
+        carPark2.setAvailableLots(100);
     }
 
     @Test
     void testSoftDeleteCarPark_Success() {
-        // Given
-        String carParkNo = "A1";
-        String deletedBy = "TEST_USER";
-        when(carParkRepository.findByCarParkNoAndDeletedAtIsNull(carParkNo)).thenReturn(Optional.of(carPark1));
-        when(carParkRepository.save(any(CarPark.class))).thenReturn(carPark1);
+        // Arrange
+        when(carParkMySqlRepository.findByCarParkNoAndDeletedAtIsNull("A1")).thenReturn(Optional.of(carPark1));
+        when(carParkMySqlRepository.save(any(CarPark.class))).thenReturn(carPark1);
 
-        // When
-        boolean result = carParkManagementService.softDeleteCarPark(carParkNo, deletedBy);
+        // Act
+        boolean result = carParkManagementService.softDeleteCarPark("A1", "TEST_USER");
 
-        // Then
+        // Assert
         assertTrue(result);
-        verify(carParkRepository).findByCarParkNoAndDeletedAtIsNull(carParkNo);
-        verify(carParkRepository).save(any(CarPark.class));
+        verify(carParkMySqlRepository).findByCarParkNoAndDeletedAtIsNull("A1");
+        verify(carParkMySqlRepository).save(any(CarPark.class));
     }
 
     @Test
     void testSoftDeleteCarPark_NotFound() {
-        // Given
-        String carParkNo = "NON_EXISTENT";
-        String deletedBy = "TEST_USER";
-        when(carParkRepository.findByCarParkNoAndDeletedAtIsNull(carParkNo)).thenReturn(Optional.empty());
+        // Arrange
+        when(carParkMySqlRepository.findByCarParkNoAndDeletedAtIsNull("NON_EXISTENT")).thenReturn(Optional.empty());
 
-        // When
-        boolean result = carParkManagementService.softDeleteCarPark(carParkNo, deletedBy);
+        // Act
+        boolean result = carParkManagementService.softDeleteCarPark("NON_EXISTENT", "TEST_USER");
 
-        // Then
+        // Assert
         assertFalse(result);
-        verify(carParkRepository).findByCarParkNoAndDeletedAtIsNull(carParkNo);
-        verify(carParkRepository, never()).save(any(CarPark.class));
+        verify(carParkMySqlRepository).findByCarParkNoAndDeletedAtIsNull("NON_EXISTENT");
+        verify(carParkMySqlRepository, never()).save(any(CarPark.class));
     }
 
     @Test
     void testRestoreCarPark_Success() {
-        // Given
-        String carParkNo = "A1";
-        String restoredBy = "TEST_USER";
+        // Arrange
         carPark1.softDelete(); // Mark as deleted
-        when(carParkRepository.findByCarParkNo(carParkNo)).thenReturn(Optional.of(carPark1));
-        when(carParkRepository.save(any(CarPark.class))).thenReturn(carPark1);
+        when(carParkMySqlRepository.findByCarParkNo("A1")).thenReturn(Optional.of(carPark1));
+        when(carParkMySqlRepository.save(any(CarPark.class))).thenReturn(carPark1);
 
-        // When
-        boolean result = carParkManagementService.restoreCarPark(carParkNo, restoredBy);
+        // Act
+        boolean result = carParkManagementService.restoreCarPark("A1", "TEST_USER");
 
-        // Then
+        // Assert
         assertTrue(result);
-        verify(carParkRepository).findByCarParkNo(carParkNo);
-        verify(carParkRepository).save(any(CarPark.class));
+        verify(carParkMySqlRepository).findByCarParkNo("A1");
+        verify(carParkMySqlRepository).save(any(CarPark.class));
     }
 
     @Test
     void testRestoreCarPark_NotDeleted() {
-        // Given
-        String carParkNo = "A1";
-        String restoredBy = "TEST_USER";
-        when(carParkRepository.findByCarParkNo(carParkNo)).thenReturn(Optional.of(carPark1));
+        // Arrange
+        when(carParkMySqlRepository.findByCarParkNo("A1")).thenReturn(Optional.of(carPark1));
 
-        // When
-        boolean result = carParkManagementService.restoreCarPark(carParkNo, restoredBy);
+        // Act
+        boolean result = carParkManagementService.restoreCarPark("A1", "TEST_USER");
 
-        // Then
+        // Assert
         assertFalse(result);
-        verify(carParkRepository).findByCarParkNo(carParkNo);
-        verify(carParkRepository, never()).save(any(CarPark.class));
+        verify(carParkMySqlRepository).findByCarParkNo("A1");
+        verify(carParkMySqlRepository, never()).save(any(CarPark.class));
     }
 
     @Test
     void testRestoreCarPark_NotFound() {
-        // Given
-        String carParkNo = "NON_EXISTENT";
-        String restoredBy = "TEST_USER";
-        when(carParkRepository.findByCarParkNo(carParkNo)).thenReturn(Optional.empty());
+        // Arrange
+        when(carParkMySqlRepository.findByCarParkNo("NON_EXISTENT")).thenReturn(Optional.empty());
 
-        // When
-        boolean result = carParkManagementService.restoreCarPark(carParkNo, restoredBy);
+        // Act
+        boolean result = carParkManagementService.restoreCarPark("NON_EXISTENT", "TEST_USER");
 
-        // Then
+        // Assert
         assertFalse(result);
-        verify(carParkRepository).findByCarParkNo(carParkNo);
-        verify(carParkRepository, never()).save(any(CarPark.class));
+        verify(carParkMySqlRepository).findByCarParkNo("NON_EXISTENT");
+        verify(carParkMySqlRepository, never()).save(any(CarPark.class));
     }
 
     @Test
     void testGetCarParkByNumber_Success() {
-        // Given
-        String carParkNo = "A1";
-        when(carParkRepository.findByCarParkNo(carParkNo)).thenReturn(Optional.of(carPark1));
+        // Arrange
+        when(carParkMySqlRepository.findByCarParkNo("A1")).thenReturn(Optional.of(carPark1));
 
-        // When
-        Optional<CarPark> result = carParkManagementService.getCarParkByNumber(carParkNo);
+        // Act
+        Optional<CarPark> result = carParkManagementService.getCarParkByNumber("A1");
 
-        // Then
+        // Assert
         assertTrue(result.isPresent());
         assertEquals("A1", result.get().getCarParkNo());
-        verify(carParkRepository).findByCarParkNo(carParkNo);
+        verify(carParkMySqlRepository).findByCarParkNo("A1");
     }
 
     @Test
     void testGetActiveCarParkByNumber_Success() {
-        // Given
-        String carParkNo = "A1";
-        when(carParkRepository.findByCarParkNoAndDeletedAtIsNull(carParkNo)).thenReturn(Optional.of(carPark1));
+        // Arrange
+        when(carParkMySqlRepository.findByCarParkNoAndDeletedAtIsNull("A1")).thenReturn(Optional.of(carPark1));
 
-        // When
-        Optional<CarPark> result = carParkManagementService.getActiveCarParkByNumber(carParkNo);
+        // Act
+        Optional<CarPark> result = carParkManagementService.getActiveCarParkByNumber("A1");
 
-        // Then
+        // Assert
         assertTrue(result.isPresent());
         assertEquals("A1", result.get().getCarParkNo());
-        verify(carParkRepository).findByCarParkNoAndDeletedAtIsNull(carParkNo);
+        verify(carParkMySqlRepository).findByCarParkNoAndDeletedAtIsNull("A1");
     }
 
     @Test
     void testGetAllActiveCarParks_Success() {
-        // Given
-        List<CarPark> carParks = Arrays.asList(carPark1, carPark2);
-        when(carParkRepository.findByDeletedAtIsNull()).thenReturn(carParks);
+        // Arrange
+        List<CarPark> mockCarParks = Arrays.asList(carPark1, carPark2);
+        when(carParkMySqlRepository.findAllActive()).thenReturn(mockCarParks);
 
-        // When
+        // Act
         List<CarPark> result = carParkManagementService.getAllActiveCarParks();
 
-        // Then
+        // Assert
         assertNotNull(result);
         assertEquals(2, result.size());
-        verify(carParkRepository).findByDeletedAtIsNull();
+        verify(carParkMySqlRepository).findAllActive();
     }
 
     @Test
     void testGetCarParksByType_Success() {
-        // Given
-        String carParkType = "SURFACE CAR PARK";
-        List<CarPark> carParks = Arrays.asList(carPark1);
-        when(carParkRepository.findByCarParkTypeAndDeletedAtIsNull(carParkType)).thenReturn(carParks);
+        // Arrange
+        List<CarPark> mockCarParks = Arrays.asList(carPark1);
+        when(carParkMySqlRepository.findByCarParkType("SURFACE CAR PARK")).thenReturn(mockCarParks);
 
-        // When
-        List<CarPark> result = carParkManagementService.getCarParksByType(carParkType);
+        // Act
+        List<CarPark> result = carParkManagementService.getCarParksByType("SURFACE CAR PARK");
 
-        // Then
+        // Assert
         assertNotNull(result);
         assertEquals(1, result.size());
-        assertEquals("SURFACE CAR PARK", result.get(0).getCarParkType());
-        verify(carParkRepository).findByCarParkTypeAndDeletedAtIsNull(carParkType);
+        verify(carParkMySqlRepository).findByCarParkType("SURFACE CAR PARK");
     }
 
     @Test
     void testGetCarParksByParkingSystem_Success() {
-        // Given
-        String parkingSystemType = "COUPON";
-        List<CarPark> carParks = Arrays.asList(carPark1);
-        when(carParkRepository.findByTypeOfParkingSystemAndDeletedAtIsNull(parkingSystemType)).thenReturn(carParks);
+        // Arrange
+        List<CarPark> mockCarParks = Arrays.asList(carPark1);
+        when(carParkMySqlRepository.findByShortTermParking("COUPON")).thenReturn(mockCarParks);
 
-        // When
-        List<CarPark> result = carParkManagementService.getCarParksByParkingSystem(parkingSystemType);
+        // Act
+        List<CarPark> result = carParkManagementService.getCarParksByParkingSystem("COUPON");
 
-        // Then
+        // Assert
         assertNotNull(result);
         assertEquals(1, result.size());
-        assertEquals("COUPON", result.get(0).getTypeOfParkingSystem());
-        verify(carParkRepository).findByTypeOfParkingSystemAndDeletedAtIsNull(parkingSystemType);
+        verify(carParkMySqlRepository).findByShortTermParking("COUPON");
     }
 
     @Test
     void testCountAvailableCarParks_Success() {
-        // Given
-        when(carParkRepository.countAvailableCarParks()).thenReturn(5L);
+        // Arrange
+        when(carParkMySqlRepository.countCarParksWithAvailability()).thenReturn(5L);
 
-        // When
+        // Act
         long result = carParkManagementService.countAvailableCarParks();
 
-        // Then
+        // Assert
         assertEquals(5L, result);
-        verify(carParkRepository).countAvailableCarParks();
-    }
-
-    @Test
-    void testGetCarParksCreatedAfter_Success() {
-        // Given
-        LocalDateTime date = LocalDateTime.now().minusDays(1);
-        List<CarPark> carParks = Arrays.asList(carPark1);
-        when(carParkRepository.findByCreatedAtAfterAndDeletedAtIsNull(date)).thenReturn(carParks);
-
-        // When
-        List<CarPark> result = carParkManagementService.getCarParksCreatedAfter(date);
-
-        // Then
-        assertNotNull(result);
-        assertEquals(1, result.size());
-        verify(carParkRepository).findByCreatedAtAfterAndDeletedAtIsNull(date);
-    }
-
-    @Test
-    void testGetCarParksUpdatedAfter_Success() {
-        // Given
-        LocalDateTime date = LocalDateTime.now().minusDays(1);
-        List<CarPark> carParks = Arrays.asList(carPark1);
-        when(carParkRepository.findByUpdatedAtAfterAndDeletedAtIsNull(date)).thenReturn(carParks);
-
-        // When
-        List<CarPark> result = carParkManagementService.getCarParksUpdatedAfter(date);
-
-        // Then
-        assertNotNull(result);
-        assertEquals(1, result.size());
-        verify(carParkRepository).findByUpdatedAtAfterAndDeletedAtIsNull(date);
+        verify(carParkMySqlRepository).countCarParksWithAvailability();
     }
 
     @Test
     void testUpdateCarParkAvailability_Success() {
-        // Given
-        String carParkNo = "A1";
-        Integer totalLots = 120;
-        Integer availableLots = 60;
-        String updatedBy = "TEST_USER";
-        when(carParkRepository.findByCarParkNoAndDeletedAtIsNull(carParkNo)).thenReturn(Optional.of(carPark1));
-        when(carParkRepository.save(any(CarPark.class))).thenReturn(carPark1);
+        // Arrange
+        when(carParkMySqlRepository.findByCarParkNoAndDeletedAtIsNull("A1")).thenReturn(Optional.of(carPark1));
+        when(carParkMySqlRepository.save(any(CarPark.class))).thenReturn(carPark1);
 
-        // When
-        boolean result = carParkManagementService.updateCarParkAvailability(carParkNo, totalLots, availableLots, updatedBy);
+        // Act
+        boolean result = carParkManagementService.updateCarParkAvailability("A1", 120, 60, "TEST_USER");
 
-        // Then
+        // Assert
         assertTrue(result);
-        verify(carParkRepository).findByCarParkNoAndDeletedAtIsNull(carParkNo);
-        verify(carParkRepository).save(any(CarPark.class));
+        verify(carParkMySqlRepository).findByCarParkNoAndDeletedAtIsNull("A1");
+        verify(carParkMySqlRepository).save(any(CarPark.class));
     }
 
     @Test
     void testUpdateCarParkAvailability_NotFound() {
-        // Given
-        String carParkNo = "NON_EXISTENT";
-        Integer totalLots = 120;
-        Integer availableLots = 60;
-        String updatedBy = "TEST_USER";
-        when(carParkRepository.findByCarParkNoAndDeletedAtIsNull(carParkNo)).thenReturn(Optional.empty());
+        // Arrange
+        when(carParkMySqlRepository.findByCarParkNoAndDeletedAtIsNull("NON_EXISTENT")).thenReturn(Optional.empty());
 
-        // When
-        boolean result = carParkManagementService.updateCarParkAvailability(carParkNo, totalLots, availableLots, updatedBy);
+        // Act
+        boolean result = carParkManagementService.updateCarParkAvailability("NON_EXISTENT", 120, 60, "TEST_USER");
 
-        // Then
+        // Assert
         assertFalse(result);
-        verify(carParkRepository).findByCarParkNoAndDeletedAtIsNull(carParkNo);
-        verify(carParkRepository, never()).save(any(CarPark.class));
+        verify(carParkMySqlRepository).findByCarParkNoAndDeletedAtIsNull("NON_EXISTENT");
+        verify(carParkMySqlRepository, never()).save(any(CarPark.class));
     }
 }

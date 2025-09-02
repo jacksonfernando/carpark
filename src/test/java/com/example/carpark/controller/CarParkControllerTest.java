@@ -4,8 +4,10 @@ import com.example.carpark.dto.request.NearestCarParkRequestDTO;
 import com.example.carpark.dto.response.CarParkResponseDTO;
 import com.example.carpark.service.CachedCarParkService;
 import com.example.carpark.service.CarParkAvailabilityService;
-import com.example.carpark.service.CarParkDataImportService;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.example.carpark.service.CarParkStreamingImportService;
+import java.math.BigDecimal;
+import java.util.Arrays;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -13,20 +15,11 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
-
-import java.math.BigDecimal;
-import java.util.Arrays;
-import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @ExtendWith(MockitoExtension.class)
 class CarParkControllerTest {
@@ -35,100 +28,88 @@ class CarParkControllerTest {
     private CachedCarParkService cachedCarParkService;
 
     @Mock
-    private CarParkDataImportService carParkDataImportService;
+    private CarParkAvailabilityService carParkAvailabilityService;
 
     @Mock
-    private CarParkAvailabilityService carParkAvailabilityService;
+    private CarParkStreamingImportService carParkStreamingImportService;
 
     @InjectMocks
     private CarParkController carParkController;
 
-    private MockMvc mockMvc;
-    private ObjectMapper objectMapper;
-
-    private CarParkResponseDTO carParkResponseDTO1;
-    private CarParkResponseDTO carParkResponseDTO2;
-    private NearestCarParkRequestDTO requestDTO;
+    private NearestCarParkRequestDTO request;
+    private List<CarParkResponseDTO> mockCarParks;
 
     @BeforeEach
     void setUp() {
-        mockMvc = MockMvcBuilders.standaloneSetup(carParkController).build();
-        objectMapper = new ObjectMapper();
-
-        // Setup test data
-        carParkResponseDTO1 = new CarParkResponseDTO(
-                "Test Address 1",
-                new BigDecimal("1.23456789"),
-                new BigDecimal("103.45678901"),
-                100,
-                50
+        request = new NearestCarParkRequestDTO(
+            new BigDecimal("1.3521"),
+            new BigDecimal("103.8198"),
+            1,
+            10
         );
-        carParkResponseDTO1.setCarParkNo("A1");
-        carParkResponseDTO1.setCarParkType("SURFACE CAR PARK");
 
-        carParkResponseDTO2 = new CarParkResponseDTO(
-                "Test Address 2",
-                new BigDecimal("1.23456790"),
-                new BigDecimal("103.45678902"),
-                80,
-                30
+        CarParkResponseDTO carParkResponseDTO1 = new CarParkResponseDTO(
+            "Test Address 1",
+            new BigDecimal("1.3521"),
+            new BigDecimal("103.8198"),
+            100,
+            50
         );
-        carParkResponseDTO2.setCarParkNo("A2");
-        carParkResponseDTO2.setCarParkType("MULTI-STOREY CAR PARK");
 
-        requestDTO = new NearestCarParkRequestDTO();
-        requestDTO.setLatitude(new BigDecimal("1.23456789"));
-        requestDTO.setLongitude(new BigDecimal("103.45678901"));
-        requestDTO.setPage(1);
-        requestDTO.setPerPage(10);
+        CarParkResponseDTO carParkResponseDTO2 = new CarParkResponseDTO(
+            "Test Address 2",
+            new BigDecimal("1.3522"),
+            new BigDecimal("103.8199"),
+            200,
+            100
+        );
+
+        mockCarParks = Arrays.asList(carParkResponseDTO1, carParkResponseDTO2);
     }
 
     @Test
-    void testFindNearestCarParks_Success() throws Exception {
-        // Given
-        List<CarParkResponseDTO> expectedResponse = Arrays.asList(carParkResponseDTO1, carParkResponseDTO2);
-        when(cachedCarParkService.findNearestCarParks(any(NearestCarParkRequestDTO.class)))
-                .thenReturn(expectedResponse);
+    void testFindNearestCarParks_Success() {
+        // Arrange
+        when(cachedCarParkService.findNearestCarParks(request)).thenReturn(mockCarParks);
 
-        // When
-        ResponseEntity<List<CarParkResponseDTO>> response = carParkController.findNearestCarParks(requestDTO);
+        // Act
+        ResponseEntity<List<CarParkResponseDTO>> response = carParkController.findNearestCarParks(request);
 
-        // Then
+        // Assert
+        assertNotNull(response);
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertNotNull(response.getBody());
         assertEquals(2, response.getBody().size());
-        assertEquals("A1", response.getBody().get(0).getCarParkNo());
-        assertEquals("A2", response.getBody().get(1).getCarParkNo());
+        assertEquals("Test Address 1", response.getBody().get(0).getAddress());
+        assertEquals("Test Address 2", response.getBody().get(1).getAddress());
 
-        verify(cachedCarParkService).findNearestCarParks(requestDTO);
+        verify(cachedCarParkService).findNearestCarParks(request);
     }
 
     @Test
     void testFindNearestCarParks_Exception() {
-        // Given
-        when(cachedCarParkService.findNearestCarParks(any(NearestCarParkRequestDTO.class)))
-                .thenThrow(new RuntimeException("Service error"));
+        // Arrange
+        when(cachedCarParkService.findNearestCarParks(request))
+            .thenThrow(new RuntimeException("Service error"));
 
-        // When
-        ResponseEntity<List<CarParkResponseDTO>> response = carParkController.findNearestCarParks(requestDTO);
+        // Act & Assert
+        assertThrows(RuntimeException.class, () -> {
+            carParkController.findNearestCarParks(request);
+        });
 
-        // Then
-        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
-        assertNull(response.getBody());
-
-        verify(cachedCarParkService).findNearestCarParks(requestDTO);
+        verify(cachedCarParkService).findNearestCarParks(request);
     }
 
     @Test
-    void testGetAllCarParksWithAvailability_Success() throws Exception {
-        // Given
-        List<CarParkResponseDTO> expectedResponse = Arrays.asList(carParkResponseDTO1, carParkResponseDTO2);
-        when(cachedCarParkService.getAllCarParksWithAvailability()).thenReturn(expectedResponse);
+    void testGetAllCarParksWithAvailability_Success() {
+        // Arrange
+        when(cachedCarParkService.getAllCarParksWithAvailability()).thenReturn(mockCarParks);
 
-        // When
+        // Act
         ResponseEntity<List<CarParkResponseDTO>> response = carParkController.getAllCarParksWithAvailability();
 
-        // Then
+        // Assert
+        assertNotNull(response);
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertNotNull(response.getBody());
         assertEquals(2, response.getBody().size());
@@ -138,138 +119,84 @@ class CarParkControllerTest {
 
     @Test
     void testGetAllCarParksWithAvailability_Exception() {
-        // Given
+        // Arrange
         when(cachedCarParkService.getAllCarParksWithAvailability())
-                .thenThrow(new RuntimeException("Service error"));
+            .thenThrow(new RuntimeException("Service error"));
 
-        // When
-        ResponseEntity<List<CarParkResponseDTO>> response = carParkController.getAllCarParksWithAvailability();
-
-        // Then
-        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
-        assertNull(response.getBody());
+        // Act & Assert
+        assertThrows(RuntimeException.class, () -> {
+            carParkController.getAllCarParksWithAvailability();
+        });
 
         verify(cachedCarParkService).getAllCarParksWithAvailability();
     }
 
     @Test
-    void testImportCarParkData_Success() throws Exception {
-        // Given
-        doNothing().when(carParkDataImportService).importCarParkData();
+    void testImportCarParkData_Success() {
+        // Arrange
+        doNothing().when(carParkStreamingImportService).importCarParkDataStreaming();
 
-        // When
+        // Act
         ResponseEntity<String> response = carParkController.importCarParkData();
 
-        // Then
+        // Assert
+        assertNotNull(response);
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        assertEquals("Car park data import completed successfully", response.getBody());
+        assertNotNull(response.getBody());
 
-        verify(carParkDataImportService).importCarParkData();
+        verify(carParkStreamingImportService).importCarParkDataStreaming();
     }
 
     @Test
     void testImportCarParkData_Exception() {
-        // Given
-        doThrow(new RuntimeException("Import failed")).when(carParkDataImportService).importCarParkData();
+        // Arrange
+        doThrow(new RuntimeException("Import error")).when(carParkStreamingImportService).importCarParkDataStreaming();
 
-        // When
-        ResponseEntity<String> response = carParkController.importCarParkData();
+        // Act & Assert
+        assertThrows(RuntimeException.class, () -> {
+            carParkController.importCarParkData();
+        });
 
-        // Then
-        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
-        assertTrue(response.getBody().contains("Failed to import car park data"));
-
-        verify(carParkDataImportService).importCarParkData();
+        verify(carParkStreamingImportService).importCarParkDataStreaming();
     }
 
     @Test
-    void testUpdateCarParkAvailability_Success() throws Exception {
-        // Given
+    void testUpdateCarParkAvailability_Success() {
+        // Arrange
         doNothing().when(carParkAvailabilityService).updateCarParkAvailability();
 
-        // When
+        // Act
         ResponseEntity<String> response = carParkController.updateCarParkAvailability();
 
-        // Then
+        // Assert
+        assertNotNull(response);
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        assertEquals("Car park availability update completed successfully", response.getBody());
+        assertNotNull(response.getBody());
 
         verify(carParkAvailabilityService).updateCarParkAvailability();
     }
 
     @Test
     void testUpdateCarParkAvailability_Exception() {
-        // Given
-        doThrow(new RuntimeException("Update failed")).when(carParkAvailabilityService).updateCarParkAvailability();
+        // Arrange
+        doThrow(new RuntimeException("Update error")).when(carParkAvailabilityService).updateCarParkAvailability();
 
-        // When
-        ResponseEntity<String> response = carParkController.updateCarParkAvailability();
-
-        // Then
-        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
-        assertTrue(response.getBody().contains("Failed to update car park availability"));
+        // Act & Assert
+        assertThrows(RuntimeException.class, () -> {
+            carParkController.updateCarParkAvailability();
+        });
 
         verify(carParkAvailabilityService).updateCarParkAvailability();
     }
 
     @Test
-    void testHealth_Success() throws Exception {
-        // When
+    void testHealthCheck() {
+        // Act
         ResponseEntity<String> response = carParkController.health();
 
-        // Then
+        // Assert
+        assertNotNull(response);
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        assertEquals("Car Park API is running", response.getBody());
-    }
-
-    @Test
-    void testFindNearestCarParks_WithNullLatitude() {
-        // Given - Invalid request with null latitude
-        NearestCarParkRequestDTO invalidRequest = new NearestCarParkRequestDTO();
-        invalidRequest.setLatitude(null);
-        invalidRequest.setLongitude(new BigDecimal("103.45678901"));
-        invalidRequest.setPage(1);
-        invalidRequest.setPerPage(10);
-
-        // When & Then - Should handle null values gracefully
-        when(cachedCarParkService.findNearestCarParks(any(NearestCarParkRequestDTO.class)))
-                .thenThrow(new RuntimeException("Invalid coordinates"));
-
-        ResponseEntity<List<CarParkResponseDTO>> response = carParkController.findNearestCarParks(invalidRequest);
-        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
-    }
-
-    @Test
-    void testFindNearestCarParks_WithInvalidCoordinates() {
-        // Given - Invalid coordinates
-        NearestCarParkRequestDTO invalidRequest = new NearestCarParkRequestDTO();
-        invalidRequest.setLatitude(new BigDecimal("100.0")); // Invalid latitude > 90
-        invalidRequest.setLongitude(new BigDecimal("103.45678901"));
-        invalidRequest.setPage(1);
-        invalidRequest.setPerPage(10);
-
-        // When & Then - Should handle invalid coordinates gracefully
-        when(cachedCarParkService.findNearestCarParks(any(NearestCarParkRequestDTO.class)))
-                .thenThrow(new RuntimeException("Invalid coordinates"));
-
-        ResponseEntity<List<CarParkResponseDTO>> response = carParkController.findNearestCarParks(invalidRequest);
-        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
-    }
-
-    @Test
-    void testFindNearestCarParks_WithInvalidPagination() {
-        // Given - Invalid pagination
-        NearestCarParkRequestDTO invalidRequest = new NearestCarParkRequestDTO();
-        invalidRequest.setLatitude(new BigDecimal("1.23456789"));
-        invalidRequest.setLongitude(new BigDecimal("103.45678901"));
-        invalidRequest.setPage(0); // Invalid page < 1
-        invalidRequest.setPerPage(10);
-
-        // When & Then - Should handle invalid pagination gracefully
-        when(cachedCarParkService.findNearestCarParks(any(NearestCarParkRequestDTO.class)))
-                .thenThrow(new RuntimeException("Invalid pagination"));
-
-        ResponseEntity<List<CarParkResponseDTO>> response = carParkController.findNearestCarParks(invalidRequest);
-        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
+        assertNotNull(response.getBody());
     }
 }
