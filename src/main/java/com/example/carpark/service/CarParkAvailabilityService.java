@@ -1,6 +1,7 @@
 package com.example.carpark.service;
 
 import com.example.carpark.entity.CarPark;
+import com.example.carpark.entity.CarParkAvailability;
 import com.example.carpark.repository.external.CarParkExternalApiRepository;
 import com.example.carpark.repository.mysql.CarParkMySqlRepository;
 import java.math.BigDecimal;
@@ -59,9 +60,7 @@ public class CarParkAvailabilityService {
      * Process car park availability data received from external API
      * Implements upsert: update if exists, insert if not exists
      */
-    private void processCarParkAvailabilityData(
-        CarParkExternalApiRepository.CarParkAvailabilityData data
-    ) {
+    private void processCarParkAvailabilityData(CarParkAvailability data) {
         try {
             logger.debug(
                 "Processing car park availability data: {} - Total: {}, Available: {}, Type: {}",
@@ -106,9 +105,7 @@ public class CarParkAvailabilityService {
     /**
      * Create a new car park entry from availability data
      */
-    private void createNewCarParkFromAvailabilityData(
-        CarParkExternalApiRepository.CarParkAvailabilityData data
-    ) {
+    private void createNewCarParkFromAvailabilityData(CarParkAvailability data) {
         try {
             // Create a basic car park entry with the data we have
             CarPark newCarPark = new CarPark(
