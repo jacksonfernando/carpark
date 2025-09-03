@@ -1,17 +1,14 @@
 package com.example.carpark.service;
 
-import com.example.carpark.entity.CarPark;
-import com.example.carpark.entity.CarParkAvailability;
 import com.example.carpark.repository.external.CarParkExternalApiRepository;
 import com.example.carpark.repository.mysql.CarParkMySqlRepository;
-import java.math.BigDecimal;
+import com.example.carpark.service.RedisGeospatialService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.locationtech.jts.geom.GeometryFactory;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -27,7 +24,7 @@ class CarParkAvailabilityServiceTest {
     private CarParkExternalApiRepository carParkExternalApiRepository;
 
     @Mock
-    private GeometryFactory geometryFactory;
+    private RedisGeospatialService redisGeospatialService;
 
     @InjectMocks
     private CarParkAvailabilityService carParkAvailabilityService;
@@ -47,7 +44,8 @@ class CarParkAvailabilityServiceTest {
     @Test
     void testUpdateCarParkAvailability_Exception() {
         // Arrange
-        doThrow(new RuntimeException("API error")).when(carParkExternalApiRepository).fetchCarParkAvailabilityStreaming(any());
+        doThrow(new RuntimeException("API error")).when(carParkExternalApiRepository)
+                .fetchCarParkAvailabilityStreaming(any());
 
         // Act & Assert
         assertThrows(RuntimeException.class, () -> {
@@ -73,10 +71,9 @@ class CarParkAvailabilityServiceTest {
     void testServiceInitialization() {
         // Arrange & Act
         CarParkAvailabilityService service = new CarParkAvailabilityService(
-            carParkMySqlRepository,
-            carParkExternalApiRepository,
-            geometryFactory
-        );
+                carParkMySqlRepository,
+                carParkExternalApiRepository,
+                redisGeospatialService);
 
         // Assert
         assertNotNull(service);
@@ -86,10 +83,9 @@ class CarParkAvailabilityServiceTest {
     void testConstructorInjection() {
         // Arrange & Act
         CarParkAvailabilityService service = new CarParkAvailabilityService(
-            carParkMySqlRepository,
-            carParkExternalApiRepository,
-            geometryFactory
-        );
+                carParkMySqlRepository,
+                carParkExternalApiRepository,
+                redisGeospatialService);
 
         // Assert
         assertNotNull(service);

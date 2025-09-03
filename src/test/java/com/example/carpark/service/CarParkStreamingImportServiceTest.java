@@ -15,15 +15,15 @@ class CarParkStreamingImportServiceTest {
     private CarParkMySqlRepository carParkMySqlRepository;
 
     @Mock
-    private CoordinateConversionService coordinateConversionService;
+    private RedisGeospatialService redisGeospatialService;
 
     @Test
     void testServiceInitialization() {
         // Arrange & Act
         CarParkStreamingImportService service = new CarParkStreamingImportService(
-            carParkMySqlRepository,
-            coordinateConversionService,
-            null // GeometryFactory not needed for basic tests
+                carParkMySqlRepository,
+                redisGeospatialService,
+                null // GeometryFactory not needed for basic tests
         );
 
         // Assert
@@ -34,10 +34,9 @@ class CarParkStreamingImportServiceTest {
     void testConstructorInjection() {
         // Arrange & Act
         CarParkStreamingImportService service = new CarParkStreamingImportService(
-            carParkMySqlRepository,
-            coordinateConversionService,
-            null
-        );
+                carParkMySqlRepository,
+                redisGeospatialService,
+                null);
 
         // Assert
         assertNotNull(service);

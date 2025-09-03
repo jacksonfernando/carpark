@@ -11,14 +11,14 @@ services:
       MYSQL_USER: carpark_user
       MYSQL_PASSWORD: carpark_password
     ports:
-      - "3306:3306"
+      - "21308:3306"
     volumes:
       - mysql_data:/var/lib/mysql
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - carpark-network
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
       timeout: 20s
       retries: 10
 
@@ -27,13 +27,13 @@ services:
     image: redis:7-alpine
     container_name: carpark-redis
     ports:
-      - "7001:6379"
+      - "21703:6379"
     volumes:
       - redis_data:/data
     networks:
       - carpark-network
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: [ "CMD", "redis-cli", "ping" ]
       timeout: 20s
       retries: 10
 
@@ -60,7 +60,7 @@ services:
     networks:
       - carpark-network
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/api/carparks/health"]
+      test: [ "CMD", "curl", "-f", "http://localhost:8080/actuator/health" ]
       timeout: 30s
       retries: 5
       start_period: 60s
@@ -68,6 +68,7 @@ services:
 volumes:
   mysql_data:
   redis_data:
+
 
 networks:
   carpark-network:

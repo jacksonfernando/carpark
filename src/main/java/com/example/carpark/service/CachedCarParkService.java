@@ -24,54 +24,63 @@ public class CachedCarParkService {
 
     private final CarParkMySqlRepository carParkMySqlRepository;
     private final GeometryFactory geometryFactory;
+    private final RedisGeospatialService redisGeospatialService;
 
     public CachedCarParkService(
         CarParkMySqlRepository carParkMySqlRepository,
-        GeometryFactory geometryFactory
+        GeometryFactory geometryFactory,
+        RedisGeospatialService redisGeospatialService
     ) {
         this.carParkMySqlRepository = carParkMySqlRepository;
         this.geometryFactory = geometryFactory;
+        this.redisGeospatialService = redisGeospatialService;
     }
 
     /**
-     * Find nearest car parks with caching using spatial functions
+     * Find nearest car parks using Redis geospatial cache with database fallback
      */
-    @Cacheable(
-        value = "nearestCarParks",
-        key = "#request.latitude + '_' + #request.longitude + '_' + #request.page + '_' + #request.perPage"
-    )
     public List<CarParkResponseDTO> findNearestCarParks(
         NearestCarParkRequestDTO request
     ) {
-        logger.info(
-            "Cache miss - fetching nearest car parks for lat: {}, lon: {}, page: {}",
-            request.getLatitude(),
-            request.getLongitude(),
-            request.getPage()
-        );
-
         try {
-            // Create search point using GeometryFactory
-            Point searchPoint = geometryFactory.createPoint(
-                new Coordinate(
-                    request.getLongitude().doubleValue(),
-                    request.getLatitude().doubleValue()
-                )
+            logger.debug(
+                "Finding nearest car parks for coordinates: {}, {}",
+                request.getLatitude(),
+                request.getLongitude()
             );
-            searchPoint.setSRID(4326);
 
-            int offset = (request.getPage() - 1) * request.getPerPage();
+            // Try Redis geospatial cache first
+            List<CarPark> cachedResults =
+                redisGeospatialService.findNearbyCarParks(
+                    request.getLatitude(),
+                    request.getLongitude(),
+                    50, // 50km radius for initial search
+                    request.getPerPage()
+                );
+
+            if (cachedResults != null && !cachedResults.isEmpty()) {
+                logger.debug(
+                    "Found {} car parks in Redis cache",
+                    cachedResults.size()
+                );
+                return convertToResponseDTO(cachedResults);
+            }
+
+            // Fallback to database query
+            logger.debug("Cache miss, querying database for nearest car parks");
+            Point searchPoint = createSearchPoint(
+                request.getLatitude(),
+                request.getLongitude()
+            );
+
             List<CarPark> carParks =
                 carParkMySqlRepository.findNearestCarParksWithPoint(
                     searchPoint,
                     request.getPerPage(),
-                    offset
+                    (request.getPage() - 1) * request.getPerPage()
                 );
 
-            return carParks
-                .stream()
-                .map(this::convertToResponseDTO)
-                .collect(Collectors.toList());
+            return convertToResponseDTO(carParks);
         } catch (Exception e) {
             logger.error("Error finding nearest car parks", e);
             throw new RuntimeException("Failed to find nearest car parks", e);
@@ -81,52 +90,53 @@ public class CachedCarParkService {
     /**
      * Get all car parks with availability (cached)
      */
-    @Cacheable(value = "availableCarParks")
+    @Cacheable(value = "carParks", key = "'allWithAvailability'")
     public List<CarParkResponseDTO> getAllCarParksWithAvailability() {
-        logger.info("Cache miss - fetching all available car parks");
+        logger.debug("Getting all car parks with availability from cache");
 
-        try {
-            List<CarPark> carParks =
-                carParkMySqlRepository.findCarParksWithAvailability();
-
-            return carParks
-                .stream()
-                .map(this::convertToResponseDTO)
-                .collect(Collectors.toList());
-        } catch (Exception e) {
-            logger.error("Error fetching all car parks with availability", e);
-            throw new RuntimeException(
-                "Failed to fetch car parks with availability",
-                e
-            );
-        }
+        List<CarPark> carParks =
+            carParkMySqlRepository.findCarParksWithAvailability();
+        return convertToResponseDTO(carParks);
     }
 
     /**
-     * Find nearest car parks with limit (cached) using spatial functions
+     * Find nearest car parks with limit (cached)
      */
-    @Cacheable(
-        value = "nearestCarParksLimit",
-        key = "#latitude + '_' + #longitude + '_' + #limit"
-    )
     public List<CarParkResponseDTO> findNearestCarParksWithLimit(
         BigDecimal latitude,
         BigDecimal longitude,
         int limit
     ) {
-        logger.info(
-            "Cache miss - fetching nearest car parks with limit for lat: {}, lon: {}, limit: {}",
-            latitude,
-            longitude,
-            limit
-        );
-
         try {
-            // Create search point using GeometryFactory
-            Point searchPoint = geometryFactory.createPoint(
-                new Coordinate(longitude.doubleValue(), latitude.doubleValue())
+            logger.debug(
+                "Finding nearest {} car parks for coordinates: {}, {}",
+                limit,
+                latitude,
+                longitude
             );
-            searchPoint.setSRID(4326);
+
+            // Try Redis geospatial cache first
+            List<CarPark> cachedResults =
+                redisGeospatialService.findNearbyCarParks(
+                    latitude,
+                    longitude,
+                    50,
+                    limit
+                );
+
+            if (cachedResults != null && !cachedResults.isEmpty()) {
+                logger.debug(
+                    "Found {} car parks in Redis cache",
+                    cachedResults.size()
+                );
+                return convertToResponseDTO(cachedResults);
+            }
+
+            // Fallback to database query
+            logger.debug(
+                "Cache miss, querying database for nearest car parks with limit"
+            );
+            Point searchPoint = createSearchPoint(latitude, longitude);
 
             List<CarPark> carParks =
                 carParkMySqlRepository.findNearestCarParksWithPoint(
@@ -135,10 +145,7 @@ public class CachedCarParkService {
                     0
                 );
 
-            return carParks
-                .stream()
-                .map(this::convertToResponseDTO)
-                .collect(Collectors.toList());
+            return convertToResponseDTO(carParks);
         } catch (Exception e) {
             logger.error("Error finding nearest car parks with limit", e);
             throw new RuntimeException(
@@ -149,15 +156,33 @@ public class CachedCarParkService {
     }
 
     /**
-     * Convert CarPark entity to CarParkResponseDTO
+     * Create a JTS Point for database queries
      */
-    private CarParkResponseDTO convertToResponseDTO(CarPark carPark) {
-        return new CarParkResponseDTO(
-            carPark.getAddress(),
-            carPark.getLatitude(),
-            carPark.getLongitude(),
-            carPark.getTotalLots(),
-            carPark.getAvailableLots()
+    private Point createSearchPoint(BigDecimal latitude, BigDecimal longitude) {
+        Point point = geometryFactory.createPoint(
+            new Coordinate(longitude.doubleValue(), latitude.doubleValue())
         );
+        point.setSRID(4326);
+        return point;
+    }
+
+    /**
+     * Convert CarPark entities to response DTOs
+     */
+    private List<CarParkResponseDTO> convertToResponseDTO(
+        List<CarPark> carParks
+    ) {
+        return carParks
+            .stream()
+            .map(carPark ->
+                new CarParkResponseDTO(
+                    carPark.getAddress(),
+                    carPark.getLatitude(),
+                    carPark.getLongitude(),
+                    carPark.getTotalLots(),
+                    carPark.getAvailableLots()
+                )
+            )
+            .collect(Collectors.toList());
     }
 }

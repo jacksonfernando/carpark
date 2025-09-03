@@ -2,10 +2,9 @@ package com.example.carpark.repository.external;
 
 import com.example.carpark.common.constants.CarParkConstants;
 import com.example.carpark.entity.CarParkAvailability;
-import com.fasterxml.jackson.core.JsonFactory;
-import com.fasterxml.jackson.core.JsonParser;
-import com.fasterxml.jackson.core.JsonToken;
-import java.io.StringReader;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import java.nio.charset.StandardCharsets;
 import java.util.function.Consumer;
 import org.slf4j.Logger;
@@ -22,15 +21,8 @@ import org.springframework.web.reactive.function.client.WebClient;
 @Repository
 public class CarParkExternalApiRepository {
 
-    private final String CARPARK_NUMBER = "carpark_number";
-    private final String CARPARK_INFO = "carkpark_info";
-    private final String TOTAL_LOTS = "total_lots";
-    private final String LOTS_AVAILABLE = "lots_available";
-    private final String LOT_TYPE = "lot_type";
-
-    private static final Logger logger = LoggerFactory.getLogger(
-        CarParkExternalApiRepository.class
-    );
+    private static final Logger logger = LoggerFactory.getLogger(CarParkExternalApiRepository.class);
+    private static final int RESPONSE_PREVIEW_LENGTH = 200;
 
     @Value("${carpark.api.url}")
     private String carparkApiURL;
@@ -39,221 +31,213 @@ public class CarParkExternalApiRepository {
     private String carparkApiKey;
 
     private final WebClient webClient;
-    private final JsonFactory jsonFactory;
+    private final ObjectMapper objectMapper;
 
     public CarParkExternalApiRepository() {
         this.webClient = WebClient.builder().build();
-        this.jsonFactory = new JsonFactory();
+        this.objectMapper = new ObjectMapper();
     }
 
     /**
      * Fetch car park availability data from external API using true streaming
-     * @param consumer Consumer to process each car park data item
      */
-    public void fetchCarParkAvailabilityStreaming(
-        Consumer<CarParkAvailability> consumer
-    ) {
+    public void fetchCarParkAvailabilityStreaming(Consumer<CarParkAvailability> consumer) {
         try {
-            logger.info(
-                "Calling car park API with streaming: {}",
-                carparkApiURL
-            );
+            logger.info("Calling car park API with streaming: {}", carparkApiURL);
 
-            WebClient.RequestHeadersSpec<?> request = webClient
-                .get()
-                .uri(carparkApiURL);
+            WebClient.RequestHeadersSpec<?> request = webClient.get().uri(carparkApiURL);
 
             if (carparkApiKey != null && !carparkApiKey.isEmpty()) {
                 request = request.header("X-Api-Key", carparkApiKey);
                 logger.info("Using API key for authentication");
             }
 
-            // Use true streaming with DataBuffer
             request
-                .retrieve()
-                .bodyToFlux(DataBuffer.class)
-                .timeout(
-                    java.time.Duration.ofSeconds(
-                        CarParkConstants.API_TIMEOUT_SECONDS
-                    )
-                )
-                .reduce(new StringBuilder(), (sb, dataBuffer) -> {
-                    byte[] bytes = new byte[dataBuffer.readableByteCount()];
-                    dataBuffer.read(bytes);
-                    DataBufferUtils.release(dataBuffer);
-                    sb.append(new String(bytes, StandardCharsets.UTF_8));
-                    return sb;
-                })
-                .map(StringBuilder::toString)
-                .doOnNext(response -> {
-                    boolean emptyResponse =
-                        response == null || response.isEmpty();
-                    if (emptyResponse) {
-                        return;
-                    }
-                    logger.info(
-                        "Received streaming response, length: {}",
-                        response.length()
-                    );
-                    logger.debug(
-                        "Response preview: {}",
-                        response.substring(0, Math.min(200, response.length()))
-                    );
-                    logger.info("Starting JSON streaming processing...");
-                    try {
-                        processJsonStreaming(response, consumer);
-                        logger.info("Completed JSON streaming processing");
-                    } catch (Exception e) {
-                        logger.error("Error processing JSON stream", e);
-                        throw new RuntimeException(
-                            "Failed to process JSON stream",
-                            e
-                        );
-                    }
-                })
-                .block();
+                    .retrieve()
+                    .bodyToFlux(DataBuffer.class)
+                    .timeout(java.time.Duration.ofSeconds(CarParkConstants.API_TIMEOUT_SECONDS))
+                    .reduce(new StringBuilder(), this::processDataBuffer)
+                    .map(StringBuilder::toString)
+                    .doOnNext(response -> processJsonResponse(response, consumer))
+                    .block();
         } catch (Exception e) {
             logger.error("Error fetching car park availability", e);
-            throw new RuntimeException(
-                "Failed to fetch car park availability",
-                e
-            );
+            throw new RuntimeException("Failed to fetch car park availability", e);
         }
     }
 
     /**
-     * Process JSON using Jackson streaming API to avoid loading entire response into memory
+     * Process DataBuffer and append to StringBuilder
      */
-    private void processJsonStreaming(
-        String jsonResponse,
-        Consumer<CarParkAvailability> consumer
-    ) throws Exception {
-        int processedCount = 0;
-        logger.info(
-            "Starting JSON streaming processing with response length: {}",
-            jsonResponse.length()
-        );
-
-        try (
-            JsonParser parser = jsonFactory.createParser(
-                new StringReader(jsonResponse)
-            )
-        ) {
-            // Navigate to carpark_data array
-            while (parser.nextToken() != null) {
-                if (
-                    parser.getCurrentToken() == JsonToken.FIELD_NAME &&
-                    "carpark_data".equals(parser.getCurrentName())
-                ) {
-                    // Start of carpark_data array
-                    if (parser.nextToken() == JsonToken.START_ARRAY) {
-                        logger.info(
-                            "Found carpark_data array, starting streaming processing"
-                        );
-
-                        while (parser.nextToken() != JsonToken.END_ARRAY) {
-                            if (
-                                parser.getCurrentToken() ==
-                                JsonToken.START_OBJECT
-                            ) {
-                                CarParkAvailability data =
-                                    parseCarParkFromStream(parser);
-                                if (data != null) {
-                                    consumer.accept(data);
-                                    processedCount++;
-                                }
-                            }
-                        }
-                    }
-                    break;
-                }
-            }
-        }
-
-        logger.info(
-            "Streaming processing completed. Total processed: {}",
-            processedCount
-        );
+    private StringBuilder processDataBuffer(StringBuilder sb, DataBuffer dataBuffer) {
+        byte[] bytes = new byte[dataBuffer.readableByteCount()];
+        dataBuffer.read(bytes);
+        DataBufferUtils.release(dataBuffer);
+        sb.append(new String(bytes, StandardCharsets.UTF_8));
+        return sb;
     }
 
     /**
-     * Parse a single car park from the JSON stream
+     * Process JSON response and extract car park data
      */
-    private CarParkAvailability parseCarParkFromStream(JsonParser parser)
-        throws Exception {
-        String carparkNumber = null;
-        CarParkAvailability carParkAvailability = new CarParkAvailability();
-
-        while (parser.nextToken() != JsonToken.END_OBJECT) {
-            if (parser.getCurrentToken() == JsonToken.FIELD_NAME) {
-                String fieldName = parser.getCurrentName();
-
-                switch (fieldName) {
-                    case CARPARK_NUMBER:
-                        parser.nextToken();
-                        carparkNumber = parser.getValueAsString();
-                        carParkAvailability.setCarparkNumber(carparkNumber);
-                        break;
-                    case CARPARK_INFO:
-                        retrieveCarParkInfoFromStream(
-                            parser,
-                            carParkAvailability
-                        );
-                        break;
-                }
-            }
+    private void processJsonResponse(String response, Consumer<CarParkAvailability> consumer) {
+        if (response == null || response.isEmpty()) {
+            return;
         }
 
-        if (carparkNumber != null && carParkAvailability.getLotType() != null) {
-            return carParkAvailability;
-        }
+        logger.info("Received streaming response, length: {}", response.length());
+        logger.debug("Response preview: {}",
+                response.substring(0, Math.min(RESPONSE_PREVIEW_LENGTH, response.length())));
+        logger.info("Starting JSON streaming processing...");
 
-        return null;
-    }
-
-    private void retrieveCarParkInfoFromStream(
-        JsonParser parser,
-        CarParkAvailability carParkAvailability
-    ) {
         try {
-            if (parser.nextToken() == JsonToken.START_ARRAY) {
-                if (parser.nextToken() == JsonToken.START_OBJECT) {
-                    while (parser.nextToken() != JsonToken.END_OBJECT) {
-                        if (parser.getCurrentToken() == JsonToken.FIELD_NAME) {
-                            String infoField = parser.getCurrentName();
-                            parser.nextToken();
-
-                            switch (infoField) {
-                                case TOTAL_LOTS:
-                                    carParkAvailability.setTotalLots(
-                                        Integer.parseInt(
-                                            parser.getValueAsString()
-                                        )
-                                    );
-                                    break;
-                                case LOTS_AVAILABLE:
-                                    carParkAvailability.setAvailableLots(
-                                        Integer.parseInt(
-                                            parser.getValueAsString()
-                                        )
-                                    );
-                                    break;
-                                case LOT_TYPE:
-                                    carParkAvailability.setLotType(
-                                        parser.getValueAsString()
-                                    );
-                                    break;
-                            }
-                        }
-                    }
-                    // Skip to end of carpark_info array
-                    while (parser.getCurrentToken() != JsonToken.END_ARRAY) {
-                        parser.nextToken();
-                    }
-                }
-            }
+            processJsonStreaming(response, consumer);
+            logger.info("Completed JSON streaming processing");
         } catch (Exception e) {
-            logger.error("Error parsing carpark info from stream", e);
+            logger.error("Error processing JSON stream", e);
+            throw new RuntimeException("Failed to process JSON stream", e);
+        }
+    }
+
+    /**
+     * Process JSON using Jackson ObjectMapper to avoid loading entire response into
+     * memory
+     */
+    private void processJsonStreaming(String jsonResponse, Consumer<CarParkAvailability> consumer) throws Exception {
+        int processedCount = 0;
+        logger.info("Starting JSON streaming processing with response length: {}", jsonResponse.length());
+
+        JsonNode rootNode = objectMapper.readTree(jsonResponse);
+        JsonNode itemsNode = rootNode.get("items");
+
+        if (itemsNode != null && itemsNode.isArray() && itemsNode.size() > 0) {
+            JsonNode firstItem = itemsNode.get(0);
+            JsonNode carparkDataNode = firstItem.get("carpark_data");
+
+            if (carparkDataNode != null && carparkDataNode.isArray()) {
+                logger.info("Found carpark_data array with {} items", carparkDataNode.size());
+                processedCount = processCarparkDataArray(carparkDataNode, consumer);
+            } else {
+                logger.warn("carpark_data not found or not an array");
+            }
+        } else {
+            logger.warn("items not found or empty");
+        }
+
+        logger.info("Streaming processing completed. Total processed: {}", processedCount);
+    }
+
+    /**
+     * Process carpark_data array and extract car park information
+     */
+    private int processCarparkDataArray(JsonNode carparkDataNode, Consumer<CarParkAvailability> consumer) {
+        int processedCount = 0;
+
+        for (JsonNode carparkNode : carparkDataNode) {
+            try {
+                CarParkAvailability data = parseCarParkFromNode(carparkNode);
+                if (data != null) {
+                    logger.debug("Successfully parsed car park: {}", data.getCarparkNumber());
+                    consumer.accept(data);
+                    processedCount++;
+                }
+            } catch (Exception e) {
+                logger.warn("Failed to parse car park node: {}", e.getMessage());
+            }
+        }
+
+        return processedCount;
+    }
+
+    /**
+     * Parse a single car park from a JsonNode
+     */
+    private CarParkAvailability parseCarParkFromNode(JsonNode carparkNode) {
+        try {
+            CarParkAvailability carParkAvailability = new CarParkAvailability();
+
+            // Get carpark_number
+            String carparkNumber = extractStringValue(carparkNode, "carpark_number");
+            if (carparkNumber == null) {
+                logger.warn("carpark_number not found or not a string");
+                return null;
+            }
+            carParkAvailability.setCarparkNumber(carparkNumber);
+            logger.debug("Set carpark_number: {}", carparkNumber);
+
+            // Get carpark_info array
+            JsonNode carparkInfoNode = carparkNode.get("carpark_info");
+            if (carparkInfoNode != null && carparkInfoNode.isArray() && carparkInfoNode.size() > 0) {
+                JsonNode firstInfo = carparkInfoNode.get(0);
+                extractCarParkInfo(firstInfo, carParkAvailability);
+            } else {
+                logger.warn("carpark_info not found or empty");
+                return null;
+            }
+
+            logger.debug("Parsed car park: carparkNumber={}, lotType={}, totalLots={}, availableLots={}",
+                    carParkAvailability.getCarparkNumber(),
+                    carParkAvailability.getLotType(),
+                    carParkAvailability.getTotalLots(),
+                    carParkAvailability.getAvailableLots());
+
+            // Check if we have the required data
+            if (carParkAvailability.getCarparkNumber() != null && carParkAvailability.getLotType() != null) {
+                logger.debug("✅ Valid car park data, returning: {}", carParkAvailability.getCarparkNumber());
+                return carParkAvailability;
+            }
+
+            logger.warn("❌ Invalid car park data - missing required fields: carparkNumber={}, lotType={}",
+                    carParkAvailability.getCarparkNumber(), carParkAvailability.getLotType());
+            return null;
+
+        } catch (Exception e) {
+            logger.error("Error parsing car park node", e);
+            return null;
+        }
+    }
+
+    /**
+     * Extract string value from JsonNode
+     */
+    private String extractStringValue(JsonNode node, String fieldName) {
+        JsonNode fieldNode = node.get(fieldName);
+        return (fieldNode != null && fieldNode.isTextual()) ? fieldNode.asText() : null;
+    }
+
+    /**
+     * Extract car park information from carpark_info node
+     */
+    private void extractCarParkInfo(JsonNode infoNode, CarParkAvailability carParkAvailability) {
+        // Get total_lots
+        String totalLotsStr = extractStringValue(infoNode, "total_lots");
+        if (totalLotsStr != null) {
+            try {
+                int totalLots = Integer.parseInt(totalLotsStr);
+                carParkAvailability.setTotalLots(totalLots);
+                logger.debug("Set total_lots: {}", totalLots);
+            } catch (NumberFormatException e) {
+                logger.warn("Failed to parse total_lots: {}", totalLotsStr);
+            }
+        }
+
+        // Get lots_available
+        String lotsAvailableStr = extractStringValue(infoNode, "lots_available");
+        if (lotsAvailableStr != null) {
+            try {
+                int lotsAvailable = Integer.parseInt(lotsAvailableStr);
+                carParkAvailability.setAvailableLots(lotsAvailable);
+                logger.debug("Set lots_available: {}", lotsAvailable);
+            } catch (NumberFormatException e) {
+                logger.warn("Failed to parse lots_available: {}", lotsAvailableStr);
+            }
+        }
+
+        // Get lot_type
+        String lotType = extractStringValue(infoNode, "lot_type");
+        if (lotType != null) {
+            carParkAvailability.setLotType(lotType);
+            logger.debug("Set lot_type: {}", lotType);
         }
     }
 }

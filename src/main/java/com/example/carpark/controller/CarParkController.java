@@ -20,19 +20,16 @@ import org.springframework.web.bind.annotation.*;
 @CrossOrigin(origins = "*")
 public class CarParkController {
 
-    private static final Logger logger = LoggerFactory.getLogger(
-        CarParkController.class
-    );
+    private static final Logger logger = LoggerFactory.getLogger(CarParkController.class);
 
     private final CachedCarParkService cachedCarParkService;
     private final CarParkStreamingImportService carParkStreamingImportService;
     private final CarParkAvailabilityService carParkAvailabilityService;
 
     public CarParkController(
-        CachedCarParkService cachedCarParkService,
-        CarParkStreamingImportService carParkStreamingImportService,
-        CarParkAvailabilityService carParkAvailabilityService
-    ) {
+            CachedCarParkService cachedCarParkService,
+            CarParkStreamingImportService carParkStreamingImportService,
+            CarParkAvailabilityService carParkAvailabilityService) {
         this.cachedCarParkService = cachedCarParkService;
         this.carParkStreamingImportService = carParkStreamingImportService;
         this.carParkAvailabilityService = carParkAvailabilityService;
@@ -43,19 +40,16 @@ public class CarParkController {
      */
     @GetMapping(CarParkConstants.NEAREST_ENDPOINT)
     public ResponseEntity<List<CarParkResponseDTO>> findNearestCarParks(
-        @Valid NearestCarParkRequestDTO request
-    ) {
+            @Valid NearestCarParkRequestDTO request) {
         try {
-            List<CarParkResponseDTO> carParks =
-                cachedCarParkService.findNearestCarParks(request);
+            List<CarParkResponseDTO> carParks = cachedCarParkService.findNearestCarParks(request);
             return ResponseEntity.ok(carParks);
         } catch (Exception e) {
             logger.error("Error finding nearest car parks", e);
             throw new CarParkException(
-                "Error finding nearest car parks",
-                ErrorCode.DATABASE_OPERATION_FAILED.getCode(),
-                e
-            );
+                    "Error finding nearest car parks",
+                    ErrorCode.DATABASE_OPERATION_FAILED.getCode(),
+                    e);
         }
     }
 
@@ -63,20 +57,16 @@ public class CarParkController {
      * Get all car parks with availability
      */
     @GetMapping(CarParkConstants.AVAILABLE_ENDPOINT)
-    public ResponseEntity<
-        List<CarParkResponseDTO>
-    > getAllCarParksWithAvailability() {
+    public ResponseEntity<List<CarParkResponseDTO>> getAllCarParksWithAvailability() {
         try {
-            List<CarParkResponseDTO> carParks =
-                cachedCarParkService.getAllCarParksWithAvailability();
+            List<CarParkResponseDTO> carParks = cachedCarParkService.getAllCarParksWithAvailability();
             return ResponseEntity.ok(carParks);
         } catch (Exception e) {
             logger.error("Error fetching car parks with availability", e);
             throw new CarParkException(
-                "Error fetching car parks with availability",
-                ErrorCode.DATABASE_OPERATION_FAILED.getCode(),
-                e
-            );
+                    "Error fetching car parks with availability",
+                    ErrorCode.DATABASE_OPERATION_FAILED.getCode(),
+                    e);
         }
     }
 
@@ -91,33 +81,26 @@ public class CarParkController {
         } catch (Exception e) {
             logger.error("Error importing car park data", e);
             throw new CarParkException(
-                CarParkConstants.ERROR_CSV_IMPORT_FAILED,
-                ErrorCode.CSV_IMPORT_FAILED.getCode(),
-                e
-            );
+                    CarParkConstants.ERROR_CSV_IMPORT_FAILED,
+                    ErrorCode.CSV_IMPORT_FAILED.getCode(),
+                    e);
         }
     }
 
     /**
-     * Update car park availability from external API
+     * Manually trigger car park availability update from external API
      */
-    @PostMapping(CarParkConstants.UPDATE_AVAILABILITY_ENDPOINT)
+    @PostMapping("/update-availability")
     public ResponseEntity<String> updateCarParkAvailability() {
         try {
-            logger.info(
-                "Starting car park availability update from external API..."
-            );
             carParkAvailabilityService.updateCarParkAvailability();
-            return ResponseEntity.ok(
-                CarParkConstants.SUCCESS_AVAILABILITY_UPDATED
-            );
+            return ResponseEntity.ok(CarParkConstants.SUCCESS_AVAILABILITY_UPDATED);
         } catch (Exception e) {
             logger.error("Error updating car park availability", e);
             throw new CarParkException(
-                CarParkConstants.ERROR_AVAILABILITY_UPDATE_FAILED,
-                ErrorCode.AVAILABILITY_UPDATE_FAILED.getCode(),
-                e
-            );
+                    CarParkConstants.ERROR_AVAILABILITY_UPDATE_FAILED,
+                    ErrorCode.AVAILABILITY_UPDATE_FAILED.getCode(),
+                    e);
         }
     }
 

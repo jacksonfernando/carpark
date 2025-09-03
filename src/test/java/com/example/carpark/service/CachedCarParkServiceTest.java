@@ -1,6 +1,7 @@
 package com.example.carpark.service;
 
 import com.example.carpark.repository.mysql.CarParkMySqlRepository;
+import com.example.carpark.service.RedisGeospatialService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -18,12 +19,16 @@ class CachedCarParkServiceTest {
     @Mock
     private GeometryFactory geometryFactory;
 
+    @Mock
+    private RedisGeospatialService redisGeospatialService;
+
     @Test
     void testServiceInitialization() {
         // Arrange & Act
         CachedCarParkService service = new CachedCarParkService(
             carParkMySqlRepository,
-            geometryFactory
+            geometryFactory,
+            redisGeospatialService
         );
 
         // Assert
@@ -35,7 +40,8 @@ class CachedCarParkServiceTest {
         // Arrange & Act
         CachedCarParkService service = new CachedCarParkService(
             carParkMySqlRepository,
-            geometryFactory
+            geometryFactory,
+            redisGeospatialService
         );
 
         // Assert
