@@ -222,32 +222,6 @@ graph LR
     end
 ```
 
-### Security & Monitoring
-
-```mermaid
-graph TD
-    subgraph "Security Layer"
-        A[Input Validation]
-        B[SQL Injection Prevention]
-        C[Cross-Origin Support]
-        D[Audit Trail]
-    end
-
-    subgraph "Monitoring & Health"
-        E[Actuator Health Checks]
-        F[Application Metrics]
-        G[Database Monitoring]
-        H[Redis Monitoring]
-    end
-
-    subgraph "Error Handling"
-        I[Global Exception Handler]
-        J[Custom Error Codes]
-        K[Structured Logging]
-        L[Graceful Degradation]
-    end
-```
-
 ### Key Architectural Decisions
 
 #### **Layered Architecture**
@@ -284,11 +258,6 @@ graph TD
 ### Option 1: Docker Compose (Recommended)
 
 The easiest way to get started is using Docker Compose, which will set up the entire environment including MySQL, Redis, and the Spring Boot application.
-
-#### Prerequisites
-- Docker Desktop installed and running
-- At least 4GB of available RAM
-- Ports 8080, 21308, and 21703 available on your machine
 
 #### Steps
 
@@ -617,34 +586,3 @@ The current implementation demonstrates good performance characteristics:
 - **Redis Cluster Support**: Can be extended to Redis cluster for higher availability
 - **Asynchronous Processing**: Scheduled tasks don't block user request processing
 - **Resource Management**: Automatic cleanup of database connections and Redis resources
-
-### Key Architectural Decisions
-
-#### **Layered Architecture**
-- **Controller Layer**: Handles HTTP requests, validation, and error handling
-- **Service Layer**: Contains business logic and orchestrates operations
-- **Repository Layer**: Manages data access and external API interactions
-- **Entity Layer**: Defines data models and relationships
-
-#### **Caching Strategy**
-- **Redis Geospatial**: Stores car park locations for fast spatial queries
-- **TTL-based Expiry**: Automatically refreshes cache every 15 minutes
-- **Fallback Mechanism**: Database queries when cache misses occur
-
-#### **Performance Optimizations**
-- **Streaming Processing**: Handles large CSV and JSON files without memory issues
-- **Batch Operations**: Uses native SQL CASE statements for efficient updates
-- **Spatial Indexing**: MySQL spatial indexes (SRID 4326) for location queries
-- **Connection Pooling**: Efficient database connection management
-
-#### **Data Flow Design**
-- **CSV Import**: Establishes car park structure and coordinates
-- **External API**: Updates availability data for existing car parks
-- **Real-time Updates**: Scheduled tasks ensure data freshness
-- **Coordinate Conversion**: Accurate SVY21 to WGS84 transformation
-
-#### **Scalability Considerations**
-- **Horizontal Scaling**: Stateless services can be replicated
-- **Database Optimization**: Efficient queries and indexing strategies
-- **Cache Distribution**: Redis cluster support for high availability
-- **Async Processing**: Non-blocking operations for better throughput
