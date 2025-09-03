@@ -42,27 +42,24 @@ class CarParkControllerTest {
     @BeforeEach
     void setUp() {
         request = new NearestCarParkRequestDTO(
-            new BigDecimal("1.3521"),
-            new BigDecimal("103.8198"),
-            1,
-            10
-        );
+                new BigDecimal("1.3521"),
+                new BigDecimal("103.8198"),
+                1,
+                10);
 
         CarParkResponseDTO carParkResponseDTO1 = new CarParkResponseDTO(
-            "Test Address 1",
-            new BigDecimal("1.3521"),
-            new BigDecimal("103.8198"),
-            100,
-            50
-        );
+                "Test Address 1",
+                new BigDecimal("1.3521"),
+                new BigDecimal("103.8198"),
+                100,
+                50);
 
         CarParkResponseDTO carParkResponseDTO2 = new CarParkResponseDTO(
-            "Test Address 2",
-            new BigDecimal("1.3522"),
-            new BigDecimal("103.8199"),
-            200,
-            100
-        );
+                "Test Address 2",
+                new BigDecimal("1.3522"),
+                new BigDecimal("103.8199"),
+                200,
+                100);
 
         mockCarParks = Arrays.asList(carParkResponseDTO1, carParkResponseDTO2);
     }
@@ -90,7 +87,7 @@ class CarParkControllerTest {
     void testFindNearestCarParks_Exception() {
         // Arrange
         when(cachedCarParkService.findNearestCarParks(request))
-            .thenThrow(new RuntimeException("Service error"));
+                .thenThrow(new RuntimeException("Service error"));
 
         // Act & Assert
         assertThrows(RuntimeException.class, () -> {
@@ -98,37 +95,6 @@ class CarParkControllerTest {
         });
 
         verify(cachedCarParkService).findNearestCarParks(request);
-    }
-
-    @Test
-    void testGetAllCarParksWithAvailability_Success() {
-        // Arrange
-        when(cachedCarParkService.getAllCarParksWithAvailability()).thenReturn(mockCarParks);
-
-        // Act
-        ResponseEntity<List<CarParkResponseDTO>> response = carParkController.getAllCarParksWithAvailability();
-
-        // Assert
-        assertNotNull(response);
-        assertEquals(HttpStatus.OK, response.getStatusCode());
-        assertNotNull(response.getBody());
-        assertEquals(2, response.getBody().size());
-
-        verify(cachedCarParkService).getAllCarParksWithAvailability();
-    }
-
-    @Test
-    void testGetAllCarParksWithAvailability_Exception() {
-        // Arrange
-        when(cachedCarParkService.getAllCarParksWithAvailability())
-            .thenThrow(new RuntimeException("Service error"));
-
-        // Act & Assert
-        assertThrows(RuntimeException.class, () -> {
-            carParkController.getAllCarParksWithAvailability();
-        });
-
-        verify(cachedCarParkService).getAllCarParksWithAvailability();
     }
 
     @Test

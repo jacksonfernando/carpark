@@ -2,6 +2,7 @@ package com.example.carpark.service;
 
 import com.example.carpark.entity.CarPark;
 import com.example.carpark.repository.mysql.CarParkMySqlRepository;
+import com.example.carpark.service.CoordinateConversionService;
 import com.opencsv.CSVReader;
 import com.opencsv.exceptions.CsvValidationException;
 import java.io.FileReader;
@@ -28,14 +29,6 @@ public class CarParkStreamingImportService {
 
     private static final Logger logger = LoggerFactory.getLogger(CarParkStreamingImportService.class);
     private static final int CHUNK_SIZE = 100;
-    private static final String DEFAULT_CAR_PARK_TYPE = "MULTI-STOREY CAR PARK";
-    private static final String DEFAULT_PARKING_SYSTEM = "ELECTRONIC PARKING";
-    private static final String DEFAULT_SHORT_TERM_PARKING = "WHOLE DAY";
-    private static final String DEFAULT_FREE_PARKING = "NO";
-    private static final String DEFAULT_NIGHT_PARKING = "YES";
-    private static final String DEFAULT_CAR_PARK_DECKS = "0";
-    private static final String DEFAULT_GANTRY_HEIGHT = "0";
-    private static final String DEFAULT_CAR_PARK_BASEMENT = "N";
 
     @Value("${carpark.data.csv.path}")
     private String csvFilePath;
@@ -43,14 +36,17 @@ public class CarParkStreamingImportService {
     private final CarParkMySqlRepository carParkMySqlRepository;
     private final RedisGeospatialService redisGeospatialService;
     private final GeometryFactory geometryFactory;
+    private final CoordinateConversionService coordinateConversionService;
 
     public CarParkStreamingImportService(
             CarParkMySqlRepository carParkMySqlRepository,
             RedisGeospatialService redisGeospatialService,
-            GeometryFactory geometryFactory) {
+            GeometryFactory geometryFactory,
+            CoordinateConversionService coordinateConversionService) {
         this.carParkMySqlRepository = carParkMySqlRepository;
         this.redisGeospatialService = redisGeospatialService;
         this.geometryFactory = geometryFactory;
+        this.coordinateConversionService = coordinateConversionService;
     }
 
     /**
@@ -203,7 +199,7 @@ public class CarParkStreamingImportService {
                 return null;
             }
 
-            BigDecimal[] wgs84Coords = convertSVY21ToWGS84Direct(
+            BigDecimal[] wgs84Coords = coordinateConversionService.convertSVY21ToWGS84(
                     new BigDecimal(row[2].trim()), new BigDecimal(row[3].trim()));
 
             logger.debug("Processing car park: {} with coordinates: {}, {}",
@@ -256,58 +252,6 @@ public class CarParkStreamingImportService {
             logger.error("Error creating location point for coordinates: {}, {}", longitude, latitude, e);
             throw e;
         }
-    }
-
-    /**
-     * Convert SVY21 coordinates to WGS84 using accurate mathematical transformation
-     */
-    private BigDecimal[] convertSVY21ToWGS84Direct(BigDecimal svy21X, BigDecimal svy21Y) {
-        try {
-            // Origin coordinates (Singapore)
-            final BigDecimal originLat = new BigDecimal("1.3666666666666667");
-            final BigDecimal originLon = new BigDecimal("103.83333333333333");
-            final BigDecimal originN = new BigDecimal("38744.572");
-            final BigDecimal originE = new BigDecimal("28001.642");
-
-            // Calculate relative coordinates
-            BigDecimal dN = svy21Y.subtract(originN);
-            BigDecimal dE = svy21X.subtract(originE);
-
-            // Conversion factors
-            final BigDecimal latFactor = new BigDecimal("0.0000089831");
-            final BigDecimal lonFactor = new BigDecimal("0.0000111319");
-
-            // Calculate latitude and longitude
-            BigDecimal lat = originLat.add(dN.multiply(latFactor));
-            BigDecimal lon = originLon.add(dE.multiply(lonFactor));
-
-            // Validate coordinates are within Singapore bounds
-            if (isOutOfBounds(lat, lon)) {
-                logger.warn("Converted coordinates out of Singapore bounds: lat={}, lon={}", lat, lon);
-                throw new IllegalArgumentException("Coordinates out of bounds");
-            }
-
-            return new BigDecimal[] {
-                    lat.setScale(8, RoundingMode.HALF_UP),
-                    lon.setScale(8, RoundingMode.HALF_UP)
-            };
-        } catch (Exception e) {
-            logger.error("Error in coordinate conversion: X={}, Y={}", svy21X, svy21Y, e);
-            return new BigDecimal[] {
-                    new BigDecimal("1.3521"),
-                    new BigDecimal("103.8198")
-            };
-        }
-    }
-
-    /**
-     * Check if coordinates are within Singapore bounds
-     */
-    private boolean isOutOfBounds(BigDecimal lat, BigDecimal lon) {
-        return lat.compareTo(new BigDecimal("1.0")) < 0 ||
-                lat.compareTo(new BigDecimal("2.0")) > 0 ||
-                lon.compareTo(new BigDecimal("103.0")) < 0 ||
-                lon.compareTo(new BigDecimal("105.0")) > 0;
     }
 
     /**

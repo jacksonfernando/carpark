@@ -140,9 +140,9 @@ erDiagram
     CarPark {
         string car_park_no PK
         string address
-        decimal latitude
-        decimal longitude
-        point location SRID4326
+        float latitude
+        float longitude
+        string location "POINT"
         int total_lots
         int available_lots
         string car_park_type
@@ -167,16 +167,15 @@ erDiagram
         string lot_type
     }
 
-    CarPark ||--|| CarParkAvailability : "availability_data"
+    CarPark ||--o{ CarParkAvailability : has
 ```
 
 ### Caching Strategy
 
 ```mermaid
 graph TD
-    subgraph "Redis Cache Layers"
+    subgraph "Redis Cache Layer"
         A[carpark:locations<br/>Geospatial Data]
-        B[carParks::allWithAvailability<br/>Query Results]
     end
 
     subgraph "Cache Operations"
@@ -186,13 +185,12 @@ graph TD
         H --> I{Cache Hit?}
         I -->|Yes| J[Return Cached Data]
         I -->|No| K[Query Database]
-        K --> L[Cache Results]
+        K --> L[Return Results]
     end
 
     D --> A
     F --> A
     H --> A
-    L --> B
 ```
 
 ### Performance Optimization Features
@@ -458,6 +456,59 @@ Place the Singapore car park CSV file in `data/carpark-data.csv` with the follow
 ```csv
 car_park_no,address,x_coord,y_coord,car_park_type,type_of_parking_system,short_term_parking,free_parking,night_parking,car_park_decks,gantry_height,car_park_basement
 A1,BLK 1/2 TANJONG PAGAR PLAZA,26076.1487,48187.2034,SURFACE CAR PARK,COUPON,WHOLE DAY,NO,YES,0,0,0
+```
+
+### Coordinate Conversion Configuration
+
+The application supports configurable coordinate conversion for different regions and coordinate systems. By default, it's configured for Singapore's SVY21 coordinate system, but can be easily adapted for other regions.
+
+#### Configuration Properties
+
+Add these properties to your `application.properties` file:
+
+```properties
+# Origin coordinates for the coordinate system
+carpark.coordinate.origin.lat=1.3666666666666667
+carpark.coordinate.origin.lon=103.83333333333333
+carpark.coordinate.origin.n=38744.572
+carpark.coordinate.origin.e=28001.642
+
+# Conversion factors for coordinate transformation
+carpark.coordinate.factor.lat=0.0000089831
+carpark.coordinate.factor.lon=0.0000111319
+
+# Coordinate bounds validation
+carpark.coordinate.bounds.lat.min=-90.0
+carpark.coordinate.bounds.lat.max=90.0
+carpark.coordinate.bounds.lon.min=-180.0
+carpark.coordinate.bounds.lon.max=180.0
+```
+
+#### Adapting for Different Regions
+
+To use this service with different coordinate systems:
+
+1. **Identify your coordinate system's origin point** (usually the southwest corner or center)
+2. **Calculate conversion factors** based on your coordinate system's scale
+3. **Set appropriate bounds** for your region
+4. **Update the configuration** in `application.properties`
+
+#### Example: UK National Grid
+
+```properties
+# UK National Grid to WGS84 conversion
+carpark.coordinate.origin.lat=49.7666666666666667
+carpark.coordinate.origin.lon=-7.5666666666666667
+carpark.coordinate.origin.n=0.0
+carpark.coordinate.origin.e=0.0
+carpark.coordinate.factor.lat=0.000001
+carpark.coordinate.factor.lon=0.000001
+
+# UK bounds
+carpark.coordinate.bounds.lat.min=49.0
+carpark.coordinate.bounds.lat.max=61.0
+carpark.coordinate.bounds.lon.min=-8.0
+carpark.coordinate.bounds.lon.max=2.0
 ```
 
 ## API Endpoints

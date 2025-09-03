@@ -54,23 +54,6 @@ public class CarParkController {
     }
 
     /**
-     * Get all car parks with availability
-     */
-    @GetMapping(CarParkConstants.AVAILABLE_ENDPOINT)
-    public ResponseEntity<List<CarParkResponseDTO>> getAllCarParksWithAvailability() {
-        try {
-            List<CarParkResponseDTO> carParks = cachedCarParkService.getAllCarParksWithAvailability();
-            return ResponseEntity.ok(carParks);
-        } catch (Exception e) {
-            logger.error("Error fetching car parks with availability", e);
-            throw new CarParkException(
-                    "Error fetching car parks with availability",
-                    ErrorCode.DATABASE_OPERATION_FAILED.getCode(),
-                    e);
-        }
-    }
-
-    /**
      * Import car park data from CSV using streaming
      */
     @PostMapping(CarParkConstants.IMPORT_ENDPOINT)

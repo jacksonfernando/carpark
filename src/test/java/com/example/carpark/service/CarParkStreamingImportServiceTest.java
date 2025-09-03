@@ -17,14 +17,17 @@ class CarParkStreamingImportServiceTest {
     @Mock
     private RedisGeospatialService redisGeospatialService;
 
+    @Mock
+    private CoordinateConversionService coordinateConversionService;
+
     @Test
     void testServiceInitialization() {
         // Arrange & Act
         CarParkStreamingImportService service = new CarParkStreamingImportService(
                 carParkMySqlRepository,
                 redisGeospatialService,
-                null // GeometryFactory not needed for basic tests
-        );
+                null, // GeometryFactory not needed for basic tests
+                coordinateConversionService);
 
         // Assert
         assertNotNull(service);
@@ -36,7 +39,8 @@ class CarParkStreamingImportServiceTest {
         CarParkStreamingImportService service = new CarParkStreamingImportService(
                 carParkMySqlRepository,
                 redisGeospatialService,
-                null);
+                null,
+                coordinateConversionService);
 
         // Assert
         assertNotNull(service);
